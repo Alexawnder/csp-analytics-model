@@ -2,18 +2,6 @@ import pandas as pd
 
 
 def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Build engineered stock features from raw daily stock prices.
-
-    Args:
-        stock_prices_df: DataFrame with columns:
-            date, open, high, low, close, volume, ticker
-
-    Returns:
-        DataFrame with stock price history plus engineered features:
-            daily_return, ma20, ma50, volatility_30d, above_ma20, above_ma50
-    """
-
     final_cols = [
         "ticker",
         "date",
@@ -23,6 +11,8 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
         "close",
         "volume",
         "daily_return",
+        "return_5d",
+        "return_20d",
         "ma20",
         "ma50",
         "volatility_30d",
@@ -35,7 +25,6 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
 
     df = stock_prices_df.copy()
 
-    # Standardize types
     df["date"] = pd.to_datetime(df["date"])
     df["ticker"] = df["ticker"].astype(str).str.upper()
 
@@ -43,16 +32,22 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Drop rows missing key fields
     df = df.dropna(subset=["ticker", "date", "close"]).copy()
-
-    # Sort before grouped rolling calculations
     df = df.sort_values(["ticker", "date"]).reset_index(drop=True)
 
     print(f"[stock_features] Input rows: {len(df)}")
 
-    # Feature engineering by ticker
     df["daily_return"] = df.groupby("ticker")["close"].pct_change()
+
+    df["return_5d"] = (
+        df.groupby("ticker")["close"]
+        .transform(lambda s: s.pct_change(periods=5))
+    )
+
+    df["return_20d"] = (
+        df.groupby("ticker")["close"]
+        .transform(lambda s: s.pct_change(periods=20))
+    )
 
     df["ma20"] = (
         df.groupby("ticker")["close"]
@@ -72,23 +67,20 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
     df["above_ma20"] = df["close"] > df["ma20"]
     df["above_ma50"] = df["close"] > df["ma50"]
 
-    # Light rounding on derived metrics only
     df["daily_return"] = df["daily_return"].round(6)
+    df["return_5d"] = df["return_5d"].round(6)
+    df["return_20d"] = df["return_20d"].round(6)
     df["ma20"] = df["ma20"].round(4)
     df["ma50"] = df["ma50"].round(4)
     df["volatility_30d"] = df["volatility_30d"].round(6)
 
     final_df = df[final_cols].copy()
-
     final_df["date"] = pd.to_datetime(final_df["date"]).dt.date
     final_df["above_ma20"] = final_df["above_ma20"].astype("boolean")
     final_df["above_ma50"] = final_df["above_ma50"].astype("boolean")
 
-    # Deduplicate just in case
     final_df = final_df.drop_duplicates(subset=["ticker", "date"]).reset_index(drop=True)
 
     print(f"[stock_features] Output rows: {len(final_df)}")
-    print(f"[stock_features] Null ma20 rows: {final_df['ma20'].isna().sum()}")
-    print(f"[stock_features] Null ma50 rows: {final_df['ma50'].isna().sum()}")
-    
+
     return final_df
