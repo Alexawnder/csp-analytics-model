@@ -1,294 +1,147 @@
-# 📊 Stock Ranking Data Pipeline
+# Stock Ranking Data Pipeline
 
-> Built a production-style data pipeline that ingests market data, engineers financial features, and ranks equities based on trend, momentum, and risk.
+This project is a simple end-to-end data pipeline that pulls stock data, builds features, ranks stocks, and displays the results in a dashboard.
 
----
-
-## 🚀 Overview
-
-This project simulates a **real-world data engineering workflow** for financial analytics.
-
-It automates the full pipeline:
-
-* Ingest daily stock price data
-* Store data in a relational database (PostgreSQL)
-* Engineer features (momentum, trend, volatility)
-* Rank stocks using a scoring model
-* Serve results through an interactive Streamlit dashboard
-
-The system is designed to demonstrate:
-
-* ETL pipeline design
-* idempotent data loading
-* time-series feature engineering
-* end-to-end analytics delivery
+I built this to simulate a real-world data workflow — from raw data ingestion all the way to something you can actually use to explore insights.
 
 ---
 
-## 🧠 Problem Statement
+## What it does
 
-Financial data is widely available, but extracting **actionable insights** requires:
+* pulls daily stock price data using `yfinance`
+* stores it in PostgreSQL
+* builds features like:
 
-* structured storage
-* consistent feature engineering
-* ranking logic to prioritize opportunities
-
-This project builds a system that transforms raw price data into a **ranked list of tradeable candidates**, enabling faster decision-making.
-
----
-
-## 🏗️ Architecture
-
-```id="arch1"
-          +------------------+
-          |   yfinance API   |
-          +------------------+
-                    ↓
-          +------------------+
-          |  Extract Layer   |
-          | (Python scripts) |
-          +------------------+
-                    ↓
-          +------------------+
-          |   PostgreSQL DB  |
-          |------------------|
-          | stock_prices     |
-          | stock_features   |
-          | stock_rankings   |
-          +------------------+
-                    ↓
-          +------------------+
-          | Transform Layer  |
-          | Feature Engineering |
-          +------------------+
-                    ↓
-          +------------------+
-          | Streamlit App    |
-          | (Dashboard UI)   |
-          +------------------+
-```
+  * moving averages (MA20, MA50)
+  * short-term momentum (5d, 20d returns)
+  * volatility
+* ranks stocks based on trend + momentum + risk
+* displays everything in a Streamlit dashboard
 
 ---
 
-## ⚙️ Tech Stack
+## Tech stack
 
-* **Python** – ETL pipeline & feature engineering
-* **PostgreSQL** – relational database for structured storage
-* **SQLAlchemy** – database connection + upsert logic
-* **pandas** – data transformation
-* **yfinance** – financial data ingestion
-* **Streamlit** – interactive dashboard
-* **Plotly** – time-series visualization
+* Python
+* PostgreSQL
+* SQLAlchemy
+* pandas
+* Streamlit
+* Plotly
 
 ---
 
-## 🔄 Data Pipeline
+## How it works
 
 ### 1. Extract
 
-* Pulls daily OHLCV data using `yfinance`
-* Configurable ticker universe
-* Handles missing data and schema normalization
+Fetches daily OHLCV data for a list of tickers.
 
 ### 2. Transform
 
-Feature engineering includes:
+Builds features per ticker:
 
-* Daily returns
-* 5-day and 20-day momentum
-* Moving averages (MA20, MA50)
-* 30-day rolling volatility
-* Trend indicators (price vs moving averages)
+* returns
+* moving averages
+* volatility
+* trend signals (above/below MA)
 
 ### 3. Load
 
-* Data stored in PostgreSQL:
+Stores data into:
 
-  * `stock_prices`
-  * `stock_features`
-  * `stock_rankings`
-* Uses **idempotent upserts**:
+* `stock_prices`
+* `stock_features`
+* `stock_rankings`
 
-  * Prevents duplicates
-  * Ensures consistent updates
-  * Supports repeatable pipeline runs
+Uses upserts so the pipeline can run repeatedly without duplicating data.
 
 ---
 
-## 🧮 Ranking Model
+## Ranking logic
 
-Each stock is scored using:
+Each stock gets a score based on:
 
-* **Trend Score**
+* momentum (5d / 20d returns)
+* trend (above MA20 / MA50)
+* volatility (penalty)
 
-  * Above MA20 / MA50
-
-* **Momentum Score**
-
-  * 5-day return
-  * 20-day return
-
-* **Volatility Penalty**
-
-  * Higher volatility reduces score
-
-### Final Score:
-
-```id="score1"
-ranking_score =
-    momentum_score * 0.5 +
-    trend_score * 0.3 -
-    volatility_penalty * 0.2
-```
-
-This prioritizes stocks with:
-
-* strong upward momentum
-* positive trend alignment
-* manageable risk
+Higher score = stronger recent performance with reasonable risk.
 
 ---
 
-## 🗄️ Database Schema
+## Dashboard
 
-### stock_prices
+The Streamlit app lets you:
 
-| Column              | Description    |
-| ------------------- | -------------- |
-| ticker              | Stock symbol   |
-| date                | Trading date   |
-| open/high/low/close | Price data     |
-| volume              | Trading volume |
-
-### stock_features
-
-| Column                  | Description         |
-| ----------------------- | ------------------- |
-| ticker                  | Stock symbol        |
-| date                    | Trading date        |
-| return_5d / return_20d  | Momentum indicators |
-| ma20 / ma50             | Moving averages     |
-| volatility_30d          | Rolling volatility  |
-| above_ma20 / above_ma50 | Trend flags         |
-
-### stock_rankings
-
-| Column             | Description        |
-| ------------------ | ------------------ |
-| ticker             | Stock symbol       |
-| ranking_date       | Ranking date       |
-| ranking_score      | Final score        |
-| trend_score        | Trend component    |
-| momentum_score     | Momentum component |
-| volatility_penalty | Risk adjustment    |
+* see top-ranked stocks
+* filter by price and score
+* exclude leveraged ETFs
+* inspect individual tickers
+* view price charts with moving averages
 
 ---
 
-## 📊 Dashboard Features
+## Running the project
 
-The Streamlit dashboard enables:
+Clone the repo:
 
-### 🔝 Leaderboard
-
-* Top-ranked stocks
-* Sortable and filterable
-
-### 🎯 Filters
-
-* Max price (budget-aware filtering)
-* Minimum ranking score
-* Exclude leveraged/inverse ETFs
-
-### 📈 Ticker Analysis
-
-* Price vs MA20 / MA50 chart
-* Trend and momentum breakdown
-* “Why this ranked here” explanation
-
-### 🔄 Live Data
-
-* Pulls directly from PostgreSQL
-* Reflects latest pipeline run
-
----
-
-## 🖼️ Example Dashboard
-
-*(Add screenshot here)*
-
----
-
-## ▶️ How to Run
-
-### 1. Clone repo
-
-```bash id="run1"
+```bash
 git clone https://github.com/yourusername/your-repo.git
 cd your-repo
 ```
 
-### 2. Set up environment
+Set up environment:
 
-```bash id="run2"
+```bash
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Configure database
+Create a `.env` file:
 
-Create `.env` file:
-
-```id="env1"
-DB_USER=your_user
-DB_PASSWORD=your_password
+```
+DB_USER=...
+DB_PASSWORD=...
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=your_db
+DB_NAME=...
 ```
 
-### 4. Run pipeline
+Run pipeline:
 
-```bash id="run3"
+```bash
 python main.py
 ```
 
-### 5. Launch dashboard
+Start dashboard:
 
-```bash id="run4"
+```bash
 streamlit run app.py
 ```
 
 ---
 
-## 📈 Future Improvements
+## Notes / things I learned
 
-* Expand to S&P 500 universe
-* Add pipeline run logging (observability)
-* Schedule automated daily refresh
-* Deploy PostgreSQL to cloud (Neon / Supabase)
-* Add alerting for top-ranked stocks
-* Incorporate additional financial signals
-
----
-
-## 💡 Key Takeaways
-
-* Designed a **modular ETL pipeline**
-* Implemented **idempotent database loading**
-* Built a **time-series feature engineering system**
-* Created an **interactive analytics dashboard**
-* Simulated a **real-world data engineering workflow**
+* handling schema changes (adding new feature columns)
+* building idempotent upsert logic in Postgres
+* working with time-series data in SQL + pandas
+* separating raw vs derived data
+* building a simple UI on top of a data pipeline
 
 ---
 
-## 📌 Why This Project Matters
+## Future improvements
 
-This project demonstrates the ability to:
+* expand to S&P 500
+* add scheduled daily runs
+* add pipeline run logging
+* deploy database + dashboard
 
-* design scalable data pipelines
-* work with relational databases and time-series data
-* transform raw data into actionable insights
-* deliver results through a user-facing application
+---
 
-It reflects skills directly applicable to **data engineering and data analyst roles**.
+## Screenshot
+
+(Add your dashboard screenshot here)
