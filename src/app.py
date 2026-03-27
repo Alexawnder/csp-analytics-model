@@ -113,16 +113,54 @@ max_price = st.sidebar.slider(
     value=float(max(df["current_price"].max(), 10))
 )
 
-min_score = st.sidebar.slider(
-    "Minimum ranking score",
-    min_value=float(df["ranking_score"].min()),
-    max_value=float(df["ranking_score"].max()),
-    value=float(df["ranking_score"].min())
-)
-
 top_n = st.sidebar.slider("Top rows", min_value=5, max_value=50, value=15)
 
+st.sidebar.subheader("Ranking Weights")
+
+trend_weight = st.sidebar.slider(
+    "Trend Weight", min_value=0.0, max_value=1.0, value=0.3, step=0.05
+)
+
+momentum_weight = st.sidebar.slider(
+    "Momentum Weight", min_value=0.0, max_value=1.0, value=0.5, step=0.05
+)
+
+volatility_weight = st.sidebar.slider(
+    "Volatility Penalty Weight", min_value=0.0, max_value=1.0, value=0.2, step=0.05
+)
+
+# Normalize weights
+weight_total = trend_weight + momentum_weight + volatility_weight
+if weight_total > 0:
+    trend_weight /= weight_total
+    momentum_weight /= weight_total
+    volatility_weight /= weight_total
+else:
+    trend_weight, momentum_weight, volatility_weight = 0.3, 0.5, 0.2
+
+
+st.sidebar.caption(
+    f"Active Weights → Trend: {trend_weight:.2f} | "
+    f"Momentum: {momentum_weight:.2f} | "
+    f"Volatility: {volatility_weight:.2f}"
+)
+
+
+# Build ranked dataframe first
 filtered_df = df.copy()
+
+filtered_df["ranking_score"] = (
+    filtered_df["trend_score"].fillna(0) * trend_weight +
+    filtered_df["momentum_score"].fillna(0) * momentum_weight -
+    filtered_df["volatility_penalty"].fillna(0) * volatility_weight
+).round(4)
+
+min_score = st.sidebar.slider(
+    "Minimum ranking score",
+    min_value=float(filtered_df["ranking_score"].min()),
+    max_value=float(filtered_df["ranking_score"].max()),
+    value=float(filtered_df["ranking_score"].min())
+)
 
 if exclude_leveraged:
     filtered_df = filtered_df[~filtered_df["ticker"].isin(LEVERAGED_INVERSE)]
@@ -196,7 +234,7 @@ with tab1:
 ticker_list = filtered_df["ticker"].tolist() if not filtered_df.empty else df["ticker"].tolist()
 selected_ticker = st.selectbox("Select a ticker", ticker_list)
 
-detail_df = df[df["ticker"] == selected_ticker].sort_values("ranking_date", ascending=False).head(1)
+detail_df = filtered_df[filtered_df["ticker"] == selected_ticker].sort_values("ranking_date", ascending=False).head(1)
 history_df = load_ticker_history(selected_ticker)
 
 # -----------------------------

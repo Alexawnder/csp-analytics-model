@@ -5,11 +5,12 @@ from sqlalchemy import create_engine
 load_dotenv()
 
 def get_engine():
-    user = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    database = os.getenv("DB_NAME")
+    database_url = os.getenv("DATABASE_URL")
 
-    connection_url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
-    return create_engine(connection_url)
+    if not database_url:
+        raise ValueError("DATABASE_URL is not set.")
+
+    return create_engine(
+        database_url,
+        pool_pre_ping=True
+    )

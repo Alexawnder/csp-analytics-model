@@ -1,8 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-
-def build_stock_rankings(stock_features_df: pd.DataFrame) -> pd.DataFrame:
+def build_stock_rankings(
+    stock_features_df: pd.DataFrame,
+    trend_weight: float = 0.3,
+    momentum_weight: float = 0.5,
+    volatility_weight: float = 0.2
+) -> pd.DataFrame:
     final_cols = [
         "ticker",
         "ranking_date",
@@ -38,32 +42,27 @@ def build_stock_rankings(stock_features_df: pd.DataFrame) -> pd.DataFrame:
         "close": "current_price"
     })
 
-    # Trend score
     latest["trend_score"] = (
         latest["above_ma20"].fillna(False).astype(int) * 10 +
         latest["above_ma50"].fillna(False).astype(int) * 15 +
         (latest["ma20"] > latest["ma50"]).fillna(False).astype(int) * 15
     )
 
-    # Momentum score
     latest["momentum_score"] = (
         latest["return_5d"].fillna(0) * 100 +
         latest["return_20d"].fillna(0) * 100
     )
 
-    # Volatility penalty
     latest["volatility_penalty"] = (
         latest["volatility_30d"].fillna(0).clip(lower=0, upper=1) * 50
     )
 
-    # Final ranking score
     latest["ranking_score"] = (
-        latest["trend_score"] +
-        latest["momentum_score"] -
-        latest["volatility_penalty"]
+        latest["trend_score"] * trend_weight +
+        latest["momentum_score"] * momentum_weight -
+        latest["volatility_penalty"] * volatility_weight
     )
 
-    # Round display fields
     round_cols = [
         "current_price",
         "ma20",
@@ -91,7 +90,5 @@ def build_stock_rankings(stock_features_df: pd.DataFrame) -> pd.DataFrame:
     final_df["above_ma50"] = final_df["above_ma50"].astype("boolean")
 
     final_df = final_df.sort_values("ranking_score", ascending=False).reset_index(drop=True)
-
-    print(f"[stock_rankings] Final output rows: {len(final_df)}")
 
     return final_df

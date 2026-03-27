@@ -1,8 +1,28 @@
 # Tickers from interesting companies including leveraged
 TICKERS = [
-    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AMD", "TSLA", "SOFI", "PLTR",
-    "SPY", "QQQ", "IWM", "DIA","TQQQ", "SQQQ", "UPRO", "SPXU", "SOXL", "SOXS",
-    "NVDL", "TSLL"
+    # Big Tech Tickers
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD",
+    
+    # Bank/Financial Tickers
+    "JPM", "BAC", "WFC", "GS", "MS",
+    
+    # Healthcare Tickers
+    "UNH", "JNJ", "PFE", "MRK", "ABBV",
+    
+    # Consumer Tickers
+    "WMT", "COST", "HD", "MCD", "NKE", "SBUX",
+    
+    # Industrials Tickers
+    "CAT", "BA", "GE", "HON",
+    
+    # Energy Tickers
+    "XOM", "CVX",
+    
+    # Tech Tickers
+    "ORCL", "ADBE", "CRM", "INTC", "CSCO",
+    
+    # Other tickers
+    "DIS", "NFLX", "PEP", "KO", "T", "VZ"
 ]
 
 # Extraction settings
