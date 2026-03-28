@@ -1,147 +1,192 @@
 # Stock Ranking Data Pipeline
 
-This project is a simple end-to-end data pipeline that pulls stock data, builds features, ranks stocks, and displays the results in a dashboard.
+A production-style end-to-end data pipeline that ingests daily stock price data, engineers technical features, ranks equities by a configurable scoring model, and surfaces results in an interactive dashboard.
 
-I built this to simulate a real-world data workflow — from raw data ingestion all the way to something you can actually use to explore insights.
+Built to simulate a real-world ETL workflow — from raw API ingestion through feature engineering, PostgreSQL persistence, and a live Streamlit front-end.
+
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-NeonDB-336791?logo=postgresql&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-dashboard-FF4B4B?logo=streamlit&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-ETL-150458?logo=pandas&logoColor=white)
 
 ---
 
 ## What it does
 
-* pulls daily stock price data using `yfinance`
-* stores it in PostgreSQL
-* builds features like:
+- Fetches daily OHLCV price data for 40+ tickers via a batched `yfinance` API call
+- Engineers rolling features: moving averages (MA20/MA50), momentum returns (5d/20d), and 30-day volatility
+- Scores and ranks each stock using a configurable trend + momentum + volatility model
+- Persists all data to PostgreSQL using upsert logic so the pipeline is fully idempotent
+- Displays results in a Streamlit dashboard with live filtering, weight adjustment, and per-ticker drill-down
 
-  * moving averages (MA20, MA50)
-  * short-term momentum (5d, 20d returns)
-  * volatility
-* ranks stocks based on trend + momentum + risk
-* displays everything in a Streamlit dashboard
+---
+
+## Architecture
+
+```
+yfinance API
+     │
+     ▼
+┌─────────────┐
+│   Extract   │  Batched OHLCV download (stock_prices.py)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  Transform  │  Feature engineering + ranking (stock_features.py, stock_rankings.py)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    Load     │  Upsert to PostgreSQL via SQLAlchemy (postgres_loader.py)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  Dashboard  │  Streamlit + Plotly interactive UI (app.py)
+└─────────────┘
+```
+
+---
+
+## Project structure
+
+```
+src/
+├── extract/
+│   └── stock_prices.py        # yfinance batch download + incremental fetch
+├── transform/
+│   ├── stock_features.py      # rolling MA, returns, volatility
+│   └── stock_rankings.py      # scoring model
+├── load/
+│   └── postgres_loader.py     # upsert, insert, truncate, query helpers
+├── pipeline/
+│   ├── full_refresh.py        # wipe + reload all data
+│   └── daily_incremental.py   # fetch only new rows, recompute affected tickers
+├── utils/
+│   ├── db.py                  # SQLAlchemy engine (single source of truth)
+│   └── config.py              # tickers, table names, pipeline constants
+├── app.py                     # Streamlit dashboard
+└── main.py                    # CLI entrypoint (--mode full | daily)
+```
 
 ---
 
 ## Tech stack
 
-* Python
-* PostgreSQL
-* SQLAlchemy
-* pandas
-* Streamlit
-* Plotly
+| Layer | Technology |
+|---|---|
+| Language | Python 3.11+ |
+| Data ingestion | yfinance |
+| Data processing | pandas, NumPy |
+| Database | PostgreSQL (NeonDB serverless) |
+| ORM / queries | SQLAlchemy |
+| Dashboard | Streamlit, Plotly |
+| Environment | python-dotenv |
 
 ---
 
-## How it works
+## Ranking model
 
-### 1. Extract
+Each stock receives a composite score:
 
-Fetches daily OHLCV data for a list of tickers.
-
-### 2. Transform
-
-Builds features per ticker:
-
-* returns
-* moving averages
-* volatility
-* trend signals (above/below MA)
-
-### 3. Load
-
-Stores data into:
-
-* `stock_prices`
-* `stock_features`
-* `stock_rankings`
-
-Uses upserts so the pipeline can run repeatedly without duplicating data.
-
----
-
-## Ranking logic
-
-Each stock gets a score based on:
-
-* momentum (5d / 20d returns)
-* trend (above MA20 / MA50)
-* volatility (penalty)
-
-Higher score = stronger recent performance with reasonable risk.
-
----
-
-## Dashboard
-
-The Streamlit app lets you:
-
-* see top-ranked stocks
-* filter by price and score
-* exclude leveraged ETFs
-* inspect individual tickers
-* view price charts with moving averages
-
----
-
-## Running the project
-
-Clone the repo:
-
-```bash
-git clone https://github.com/yourusername/your-repo.git
-cd your-repo
+```
+ranking_score = (trend_score × trend_weight)
+              + (momentum_score × momentum_weight)
+              - (volatility_penalty × volatility_weight)
 ```
 
-Set up environment:
+| Signal | How it's calculated |
+|---|---|
+| Trend score | Points for trading above MA20, MA50, and MA20 > MA50 crossover |
+| Momentum score | Weighted sum of 5-day and 20-day price returns |
+| Volatility penalty | 30-day rolling standard deviation of daily returns |
 
+Default weights (0.3 / 0.5 / 0.2) are adjustable live in the dashboard sidebar — all weights are auto-normalised to sum to 1.
+
+---
+
+## Pipeline modes
+
+The pipeline supports two run modes:
+
+**Full refresh** — truncates all tables and reloads the full price history from scratch:
+```bash
+python src/main.py --mode full
+```
+
+**Daily incremental** — fetches only new price rows since the last stored date per ticker, then recomputes features and rankings for affected tickers only:
+```bash
+python src/main.py --mode daily
+```
+
+---
+
+## Setup
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/yourusername/csp-analytics-model.git
+cd csp-analytics-model
+```
+
+**2. Create and activate a virtual environment**
 ```bash
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS / Linux
+```
+
+**3. Install dependencies**
+```bash
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
+**4. Configure environment variables**
 
+Create a `.env` file in the project root:
 ```
-DB_USER=...
-DB_PASSWORD=...
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=...
+DATABASE_URL=postgresql+psycopg2://user:password@host/dbname
 ```
 
-Run pipeline:
+If using NeonDB, use the **pooled connection string** from your Neon dashboard (hostname contains `-pooler`) for best performance.
 
+**5. Run the pipeline**
 ```bash
-python main.py
+# First time — full load
+python src/main.py --mode full
+
+# Every day after
+python src/main.py --mode daily
 ```
 
-Start dashboard:
-
+**6. Launch the dashboard**
 ```bash
-streamlit run app.py
+streamlit run src/app.py
 ```
 
 ---
 
-## Notes / things I learned
+## Dashboard features
 
-* handling schema changes (adding new feature columns)
-* building idempotent upsert logic in Postgres
-* working with time-series data in SQL + pandas
-* separating raw vs derived data
-* building a simple UI on top of a data pipeline
+- **Leaderboard** — top-ranked stocks with sortable columns
+- **Live weight sliders** — adjust trend/momentum/volatility weights and re-rank in real time
+- **Filters** — max price, minimum score, exclude leveraged/inverse ETFs
+- **Ticker detail** — full breakdown of scores, MA levels, and why a stock ranked where it did
+- **Price chart** — close price with MA20 and MA50 overlaid
 
 ---
 
 ## Future improvements
 
-* expand to S&P 500
-* add scheduled daily runs
-* add pipeline run logging
-* deploy database + dashboard
+- Expand universe to S&P 500
+- Add GitHub Actions workflow for automated daily runs
+- Add structured pipeline logging (log file + run history table)
+- Deploy dashboard to Streamlit Cloud
+- Add additional signals: RSI, volume trend, earnings proximity
 
 ---
 
 ## Screenshot
 
-(Add your dashboard screenshot here)
+*(Add dashboard screenshot here)*
