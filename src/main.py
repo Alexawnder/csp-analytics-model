@@ -1,42 +1,29 @@
-from extract.stock_prices import fetch_stock_prices
-from transform.stock_features import build_stock_features
-from transform.stock_rankings import build_stock_rankings
+import argparse
+
 from utils.db import get_engine
-from utils.config import (
-    TICKERS,
-    PRICE_HISTORY_PERIOD,
-    PRICE_INTERVAL,
-    DB_TABLE_STOCK_PRICES,
-    DB_TABLE_STOCK_FEATURES,
-    DB_TABLE_STOCK_RANKINGS,
-)
-from load.postgres_loader import upsert_dataframe
+from utils.config import TICKERS
+from pipeline.full_refresh import run_full_refresh_pipeline
+from pipeline.daily_incremental import run_daily_incremental_pipeline
 
 
 def main():
-    print("Starting stock ranking pipeline...")
+    parser = argparse.ArgumentParser(description="Run stock ranking pipeline.")
+    parser.add_argument(
+        "--mode",
+        choices=["full", "daily"],
+        default="daily",
+        help="Pipeline mode: 'full' for full refresh, 'daily' for incremental update.",
+    )
+    args = parser.parse_args()
 
     engine = get_engine()
 
-    stock_prices_df = fetch_stock_prices(
-        TICKERS,
-        period=PRICE_HISTORY_PERIOD,
-        interval=PRICE_INTERVAL
-    )
-
-    print(f"Stock prices shape: {stock_prices_df.shape}")
-
-    stock_features_df = build_stock_features(stock_prices_df)
-    stock_rankings_df = build_stock_rankings(stock_features_df)
-
-    print(f"Stock features shape: {stock_features_df.shape}")
-    print(f"Stock rankings shape: {stock_rankings_df.shape}")
-
-    upsert_dataframe(stock_prices_df, DB_TABLE_STOCK_PRICES, engine, ["ticker", "date"])
-    upsert_dataframe(stock_features_df, DB_TABLE_STOCK_FEATURES, engine, ["ticker", "date"])
-    upsert_dataframe(stock_rankings_df, DB_TABLE_STOCK_RANKINGS, engine, ["ticker", "ranking_date"])
-
-    print("Pipeline completed successfully.")
+    if args.mode == "full":
+        run_full_refresh_pipeline(engine, TICKERS)
+    elif args.mode == "daily":
+        run_daily_incremental_pipeline(engine, TICKERS)
+    else:
+        raise ValueError(f"Unsupported pipeline mode: {args.mode}")
 
 
 if __name__ == "__main__":
