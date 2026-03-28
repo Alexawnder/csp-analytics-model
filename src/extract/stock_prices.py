@@ -140,6 +140,7 @@ def _fetch_tickers_individually(
     end: str | None = None,
 ) -> pd.DataFrame:
     all_data = []
+
     for ticker in tickers:
         try:
             kwargs = dict(auto_adjust=False, progress=False)
