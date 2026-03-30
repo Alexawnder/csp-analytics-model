@@ -12,7 +12,7 @@ concurrency:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-
+    environment: environment
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -29,6 +29,6 @@ jobs:
 
       - name: Run daily pipeline
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{secrets.DATABASE_URL}}
         run: |
           python src/main.py --mode daily
