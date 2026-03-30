@@ -8,6 +8,7 @@ _engine = None
 
 
 def get_engine():
+    
     """
     Return the shared SQLAlchemy engine, creating it on first call.
 
@@ -17,6 +18,7 @@ def get_engine():
     (common with serverless Postgres like NeonDB). pool_recycle discards
     connections older than 5 minutes for the same reason.
     """
+
     global _engine
     if _engine is None:
         database_url = os.getenv("DATABASE_URL")
