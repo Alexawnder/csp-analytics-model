@@ -1,7 +1,10 @@
+import logging
 from typing import List
+
 import pandas as pd
 import yfinance as yf
 
+logger = logging.getLogger(__name__)
 
 PRICE_COLUMNS = ["date", "open", "high", "low", "close", "volume", "ticker"]
 
@@ -24,7 +27,7 @@ def _standardize_price_data(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     missing_cols = [col for col in required_cols if col not in df.columns]
 
     if missing_cols:
-        print(f"Missing expected columns for {ticker}: {missing_cols}")
+        logger.warning("Missing expected columns for %s: %s", ticker, missing_cols)
         return pd.DataFrame(columns=PRICE_COLUMNS)
 
     df = df[required_cols].copy()
@@ -55,7 +58,7 @@ def fetch_stock_prices(
     all_data = []
 
     for ticker in tickers:
-        print(f"Downloading price data for {ticker}...")
+        logger.info("Downloading price data for %s...", ticker)
 
         try:
             raw_df = yf.download(
@@ -69,54 +72,13 @@ def fetch_stock_prices(
             clean_df = _standardize_price_data(raw_df, ticker)
 
             if clean_df.empty:
-                print(f"No usable data returned for {ticker}")
+                logger.warning("No usable data returned for %s", ticker)
                 continue
 
             all_data.append(clean_df)
 
         except Exception as e:
-            print(f"Error downloading price data for {ticker}: {e}")
-
-    if not all_data:
-        return pd.DataFrame(columns=PRICE_COLUMNS)
-
-    final_df = pd.concat(all_data, ignore_index=True)
-    final_df = final_df.drop_duplicates(subset=["ticker", "date"]).reset_index(drop=True)
-    return final_df
-
-
-def extract_stock_prices_full(
-    tickers: List[str],
-    start_date: str,
-    end_date: str | None = None
-) -> pd.DataFrame:
-    """
-    Fetch full stock price history using explicit start/end dates.
-    """
-    all_data = []
-
-    for ticker in tickers:
-        print(f"[extract full] {ticker}")
-
-        try:
-            raw_df = yf.download(
-                ticker,
-                start=start_date,
-                end=end_date,
-                auto_adjust=False,
-                progress=False
-            )
-
-            clean_df = _standardize_price_data(raw_df, ticker)
-
-            if clean_df.empty:
-                print(f"[extract full] No usable data for {ticker}")
-                continue
-
-            all_data.append(clean_df)
-
-        except Exception as e:
-            print(f"[extract full] {ticker} failed: {e}")
+            logger.error("Error downloading price data for %s: %s", ticker, e)
 
     if not all_data:
         return pd.DataFrame(columns=PRICE_COLUMNS)
@@ -152,10 +114,10 @@ def fetch_incremental_stock_prices(
             start_date = today - pd.Timedelta(days=365 * 2)
 
         if start_date >= today:
-            print(f"[extract incremental] {ticker}: up to date")
+            logger.info("[extract incremental] %s: up to date", ticker)
             continue
 
-        print(f"[extract incremental] {ticker}: {start_date.date()} -> {today.date()}")
+        logger.info("[extract incremental] %s: %s -> %s", ticker, start_date.date(), today.date())
 
         try:
             raw_df = yf.download(
@@ -169,13 +131,13 @@ def fetch_incremental_stock_prices(
             clean_df = _standardize_price_data(raw_df, ticker)
 
             if clean_df.empty:
-                print(f"[extract incremental] No usable new data for {ticker}")
+                logger.warning("[extract incremental] No usable new data for %s", ticker)
                 continue
 
             all_new_data.append(clean_df)
 
         except Exception as e:
-            print(f"[extract incremental] {ticker} failed: {e}")
+            logger.error("[extract incremental] %s failed: %s", ticker, e)
 
     if not all_new_data:
         return pd.DataFrame(columns=PRICE_COLUMNS)

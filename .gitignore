@@ -1,3 +1,25 @@
+# Environment
 .env
 venv/
+
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db

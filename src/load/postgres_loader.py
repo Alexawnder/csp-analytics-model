@@ -1,6 +1,10 @@
+import logging
 import math
+
 import pandas as pd
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
 def _chunk_records(records: list[dict], chunk_size: int):
@@ -27,7 +31,7 @@ def upsert_dataframe(
         chunk_size: Number of rows per batch
     """
     if df.empty:
-        print(f"Skipping load for {table_name}: dataframe is empty.")
+        logger.info("Skipping load for %s: dataframe is empty.", table_name)
         return
 
     df = df.copy()
@@ -39,7 +43,7 @@ def upsert_dataframe(
     all_columns = list(df.columns)
 
     if not all_columns:
-        print(f"Skipping load for {table_name}: dataframe has no columns.")
+        logger.info("Skipping load for %s: dataframe has no columns.", table_name)
         return
 
     update_columns = [col for col in all_columns if col not in conflict_columns]
@@ -78,17 +82,15 @@ def upsert_dataframe(
         with engine.begin() as conn:
             for idx, chunk in enumerate(_chunk_records(records, chunk_size), start=1):
                 conn.execute(text(sql), chunk)
-                print(
-                    f"Upserted chunk {idx}/{total_chunks} "
-                    f"({len(chunk)} rows) into {table_name}."
+                logger.info(
+                    "Upserted chunk %d/%d (%d rows) into %s.",
+                    idx, total_chunks, len(chunk), table_name
                 )
 
-        print(f"Finished upserting {total_rows} rows into {table_name}.")
+        logger.info("Finished upserting %d rows into %s.", total_rows, table_name)
 
     except Exception as e:
-        print(f"Failed to upsert table '{table_name}'.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
+        logger.error("Failed to upsert table '%s': %s: %s", table_name, type(e).__name__, e)
         raise
 
 
@@ -102,7 +104,7 @@ def truncate_tables(
     Truncate one or more PostgreSQL tables.
     """
     if not table_names:
-        print("No tables provided for truncate.")
+        logger.info("No tables provided for truncate.")
         return
 
     quoted_tables = ", ".join([f'"{table}"' for table in table_names])
@@ -120,23 +122,34 @@ def truncate_tables(
         with engine.begin() as conn:
             conn.execute(text(sql))
 
-        print(f"Truncated tables: {', '.join(table_names)}")
+        logger.info("Truncated tables: %s", ", ".join(table_names))
 
     except Exception as e:
-        print("Failed to truncate tables.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
+        logger.error("Failed to truncate tables: %s: %s", type(e).__name__, e)
         raise
 
-    
+
 def insert_dataframe(
     df: pd.DataFrame,
     table_name: str,
     engine,
     chunk_size: int = 500
 ) -> None:
+    """
+    Insert a pandas DataFrame into a PostgreSQL table in batches.
+
+    Unlike upsert_dataframe, this performs a plain INSERT with no conflict
+    handling. Intended for full-refresh loads where the table has been
+    truncated immediately before calling this function.
+
+    Args:
+        df: DataFrame to load
+        table_name: Target PostgreSQL table name
+        engine: SQLAlchemy engine
+        chunk_size: Number of rows per batch
+    """
     if df.empty:
-        print(f"Skipping load for {table_name}: dataframe is empty.")
+        logger.info("Skipping load for %s: dataframe is empty.", table_name)
         return
 
     df = df.copy()
@@ -146,7 +159,7 @@ def insert_dataframe(
     all_columns = list(df.columns)
 
     if not all_columns:
-        print(f"Skipping load for {table_name}: dataframe has no columns.")
+        logger.info("Skipping load for %s: dataframe has no columns.", table_name)
         return
 
     quoted_columns = [f'"{col}"' for col in all_columns]
@@ -165,24 +178,20 @@ def insert_dataframe(
         with engine.begin() as conn:
             for idx, chunk in enumerate(_chunk_records(records, chunk_size), start=1):
                 conn.execute(text(sql), chunk)
-                print(
-                    f"Inserted chunk {idx}/{total_chunks} "
-                    f"({len(chunk)} rows) into {table_name}."
+                logger.info(
+                    "Inserted chunk %d/%d (%d rows) into %s.",
+                    idx, total_chunks, len(chunk), table_name
                 )
 
-        print(f"Finished inserting {total_rows} rows into {table_name}.")
+        logger.info("Finished inserting %d rows into %s.", total_rows, table_name)
 
     except Exception as e:
-        print(f"Failed to insert table '{table_name}'.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
+        logger.error("Failed to insert into table '%s': %s: %s", table_name, type(e).__name__, e)
         raise
 
 
 def get_latest_price_dates(engine, table_name: str) -> pd.DataFrame:
-    
-    #Get the latest stored date per ticker from a price table.
-
+    """Get the latest stored date per ticker from a price table."""
     sql = f"""
         SELECT ticker, MAX(date) AS last_date
         FROM "{table_name}"
@@ -200,10 +209,9 @@ def get_latest_price_dates(engine, table_name: str) -> pd.DataFrame:
         return df
 
     except Exception as e:
-        print(f"Failed to fetch latest price dates from '{table_name}'.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
+        logger.error("Failed to fetch latest price dates from '%s': %s: %s", table_name, type(e).__name__, e)
         raise
+
 
 def get_price_history_for_tickers(
     engine,
@@ -218,19 +226,24 @@ def get_price_history_for_tickers(
     if not tickers:
         return pd.DataFrame()
 
-    quoted_tickers = ", ".join([f"'{ticker}'" for ticker in tickers])
-
+    # table_name comes from internal config constants, not user input,
+    # so f-string interpolation here is safe. The WHERE clause values
+    # remain parameterised to avoid any injection risk.
     sql = f"""
         SELECT date, open, high, low, close, volume, ticker
         FROM "{table_name}"
-        WHERE ticker IN ({quoted_tickers})
-        AND date >= CURRENT_DATE - INTERVAL '{lookback_days} days'
+        WHERE ticker = ANY(:tickers)
+        AND date >= CURRENT_DATE - INTERVAL :lookback
         ORDER BY ticker, date;
     """
 
     try:
         with engine.begin() as conn:
-            df = pd.read_sql(text(sql), conn)
+            df = pd.read_sql(
+                text(sql),
+                conn,
+                params={"tickers": tickers, "lookback": f"{lookback_days} days"}
+            )
 
         if not df.empty:
             df["date"] = pd.to_datetime(df["date"])
@@ -238,38 +251,5 @@ def get_price_history_for_tickers(
         return df
 
     except Exception as e:
-        print(f"Failed to fetch price history for tickers from '{table_name}'.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
-        raise
-
-def truncate_tables(engine, table_names: list[str], restart_identity: bool = True, cascade: bool = True) -> None:
-    """
-    Truncate one or more PostgreSQL tables.
-    """
-    if not table_names:
-        print("No tables provided for truncate.")
-        return
-
-    quoted_tables = ", ".join([f'"{table}"' for table in table_names])
-
-    sql = f"TRUNCATE TABLE {quoted_tables}"
-
-    if restart_identity:
-        sql += " RESTART IDENTITY"
-    if cascade:
-        sql += " CASCADE"
-
-    sql += ";"
-
-    try:
-        with engine.begin() as conn:
-            conn.execute(text(sql))
-
-        print(f"Truncated tables: {', '.join(table_names)}")
-
-    except Exception as e:
-        print("Failed to truncate tables.")
-        print(f"Error type: {type(e).__name__}")
-        print(str(e))
+        logger.error("Failed to fetch price history from '%s': %s: %s", table_name, type(e).__name__, e)
         raise

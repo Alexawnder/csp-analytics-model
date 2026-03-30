@@ -1,7 +1,25 @@
+import logging
+
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Engineer rolling technical features from raw OHLCV price data.
+
+    For each ticker computes:
+      - daily_return:    day-over-day percentage change in close price
+      - return_5d/20d:   5- and 20-day cumulative return (momentum signals)
+      - ma20/ma50:       20- and 50-day simple moving averages
+      - volatility_30d:  30-day rolling standard deviation of daily returns
+      - above_ma20/50:   boolean flags for price vs moving average crossovers
+      - ma20_above_ma50: golden/death cross indicator
+
+    Requires min_periods equal to the window size so partial windows
+    (e.g. the first 19 rows for MA20) produce NaN rather than misleading values.
+    """
     final_cols = [
         "ticker",
         "date",
@@ -36,7 +54,7 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["ticker", "date", "close"]).copy()
     df = df.sort_values(["ticker", "date"]).reset_index(drop=True)
 
-    print(f"[stock_features] Input rows: {len(df)}")
+    logger.info("[stock_features] Input rows: %d", len(df))
 
     df["daily_return"] = df.groupby("ticker")["close"].pct_change()
 
@@ -84,11 +102,11 @@ def build_stock_features(stock_prices_df: pd.DataFrame) -> pd.DataFrame:
 
     final_df = final_df.drop_duplicates(subset=["ticker", "date"]).reset_index(drop=True)
 
-    print(f"[stock_features] Output rows: {len(final_df)}")
-    print(f"[stock_features] Null return_5d rows: {final_df['return_5d'].isna().sum()}")
-    print(f"[stock_features] Null return_20d rows: {final_df['return_20d'].isna().sum()}")
-    print(f"[stock_features] Null ma20 rows: {final_df['ma20'].isna().sum()}")
-    print(f"[stock_features] Null ma50 rows: {final_df['ma50'].isna().sum()}")
-    print(f"[stock_features] Null volatility_30d rows: {final_df['volatility_30d'].isna().sum()}")
+    logger.info("[stock_features] Output rows: %d", len(final_df))
+    logger.info("[stock_features] Null return_5d rows: %d", final_df["return_5d"].isna().sum())
+    logger.info("[stock_features] Null return_20d rows: %d", final_df["return_20d"].isna().sum())
+    logger.info("[stock_features] Null ma20 rows: %d", final_df["ma20"].isna().sum())
+    logger.info("[stock_features] Null ma50 rows: %d", final_df["ma50"].isna().sum())
+    logger.info("[stock_features] Null volatility_30d rows: %d", final_df["volatility_30d"].isna().sum())
 
     return final_df

@@ -1,9 +1,20 @@
 import argparse
+import logging
 
 from utils.db import get_engine
 from utils.config import TICKERS
 from pipeline.full_refresh import run_full_refresh_pipeline
 from pipeline.daily_incremental import run_daily_incremental_pipeline
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("pipeline.log"),
+    ],
+)
 
 
 def main():

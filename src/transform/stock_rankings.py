@@ -1,5 +1,5 @@
-import numpy as np
 import pandas as pd
+
 
 def build_stock_rankings(
     stock_features_df: pd.DataFrame,
@@ -7,6 +7,25 @@ def build_stock_rankings(
     momentum_weight: float = 0.5,
     volatility_weight: float = 0.2
 ) -> pd.DataFrame:
+    """
+    Score and rank stocks using the latest row of features per ticker.
+
+    Composite score:
+        ranking_score = (trend_score * trend_weight)
+                      + (momentum_score * momentum_weight)
+                      - (volatility_penalty * volatility_weight)
+
+    Scoring components:
+      - trend_score:        points for price above MA20 (+10), above MA50 (+15),
+                            and MA20 crossing above MA50 (+15). Max = 40.
+      - momentum_score:     sum of 5d and 20d returns scaled by 100 so the
+                            values are in a comparable range to trend_score.
+      - volatility_penalty: 30d return std dev clipped to [0, 1] then scaled
+                            by 50 so extreme volatility can offset strong momentum.
+
+    Default weights (0.3 / 0.5 / 0.2) can be overridden and are applied as-is —
+    normalisation to sum=1 is handled by the caller (e.g. the Streamlit dashboard).
+    """
     final_cols = [
         "ticker",
         "ranking_date",
