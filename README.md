@@ -10,9 +10,17 @@ An end-to-end data pipeline that ingests daily stock price data, engineers techn
 
 ---
 
-## Screenshot
+## Dashboard Preview
 
-*(Add dashboard screenshot here)*
+<p align="center">
+  <img src="images/top-ranked-stocks.png" alt="Top Ranked Stocks" width="48%" />
+  <img src="images/detail-view.png" alt="Ticker Detail View" width="48%" />
+</p>
+
+<p align="center">
+  <img src="images/price-chart.png" alt="Price Chart" width="48%" />
+  <img src="images/sector-breakdown.png" alt="Sector Breakdown" width="48%" />
+</p>
 
 ---
 
@@ -202,6 +210,5 @@ streamlit run src/app.py
 ## Future improvements
 
 - Expand universe to S&P 500
-- Deploy dashboard to Streamlit Cloud
 - Add additional signals: RSI, volume trend, earnings proximity
 - Add unit tests for feature engineering and scoring logic
