@@ -95,21 +95,27 @@ src/
 
 ## Ranking model
 
-Each stock receives a composite score:
+Each signal is first normalised to `[0, 1]` so that weights are meaningful — a 50% momentum weight genuinely contributes 50% of the score regardless of the raw signal magnitudes.
 
 ```
-ranking_score = (trend_score × trend_weight)
-              + (momentum_score × momentum_weight)
-              - (volatility_penalty × volatility_weight)
+# Normalisation
+trend_norm      = trend_score / 40          # max possible trend score = 40
+momentum_norm   = min-max scaled across all loaded stocks
+volatility_norm = volatility_penalty / 50   # max possible penalty = 50
+
+# Composite score (0–100)
+ranking_score = (trend_norm × trend_weight
+              + momentum_norm × momentum_weight
+              - volatility_norm × volatility_weight) × 100
 ```
 
-| Signal | How it's calculated |
-|---|---|
-| Trend score | +10 for price above MA20, +15 for above MA50, +15 for MA20 > MA50 crossover (max 40) |
-| Momentum score | 5-day and 20-day returns each scaled by 100 to match trend score range |
-| Volatility penalty | 30-day rolling std dev of daily returns, clipped and scaled by 50 |
+| Signal | Raw calculation | Normalised |
+|---|---|---|
+| Trend | +10 above MA20, +15 above MA50, +15 for MA20 > MA50 crossover | divided by 40 |
+| Momentum | 5-day + 20-day price returns | min-max across all stocks |
+| Volatility penalty | 30-day rolling std dev of daily returns, clipped to [0, 1] × 50 | divided by 50 |
 
-Default weights (0.3 / 0.5 / 0.2) are adjustable live in the dashboard sidebar — weights are auto-normalised to sum to 1.
+Default weights (30 / 50 / 20) are adjustable live in the dashboard sidebar. Adjusting one slider automatically rebalances the others to always sum to 100%.
 
 ---
 
@@ -186,9 +192,10 @@ streamlit run src/app.py
 
 - **Leaderboard** — top-ranked stocks with filterable, sortable columns
 - **Live weight sliders** — adjust trend/momentum/volatility weights and re-rank in real time
-- **Filters** — max price, minimum score, exclude leveraged/inverse ETFs
+- **Filters** — max price, minimum score, top N results
 - **Ticker detail** — full score breakdown, MA levels, and plain-language reasoning for the ranking
-- **Price chart** — close price with MA20 and MA50 overlaid
+- **Price chart** — close price with MA20, MA50, and volume overlaid
+- **Sector breakdown** — average score, 5D/20D returns, and ticker count per GICS sector
 
 ---
 

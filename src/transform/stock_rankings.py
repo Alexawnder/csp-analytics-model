@@ -49,6 +49,10 @@ def build_stock_rankings(
     df = stock_features_df.copy()
     df["date"] = pd.to_datetime(df["date"])
 
+    # Exclude benchmark — SPY is used for relative strength in the dashboard
+    # but should not appear in the stock rankings itself
+    df = df[df["ticker"] != "SPY"]
+
     latest = (
         df.sort_values(["ticker", "date"])
         .groupby("ticker", as_index=False)
